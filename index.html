@@ -62,9 +62,11 @@
             <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
                 <div class="flex justify-between items-center mb-3">
                     <h2 class="font-bold text-gray-800 text-sm">เปรียบเทียบค่าใช้จ่ายรายเดือน</h2>
-                    <select id="dashboard-month-selector" class="text-xs bg-gray-50 border border-gray-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500">
-                        <option value="all">ทั้งหมด</option>
-                    </select>
+                        <select id="dashboard-month-selector" class="text-xs bg-gray-50 border border-gray-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                            <option value="6">ย้อนหลัง 6 เดือน</option>
+                            <option value="12">ย้อนหลัง 1 ปี</option>
+                            <option value="all">ทั้งหมด</option>
+                        </select>
                 </div>
 
                 <div class="relative w-full h-64" id="monthly-stats-container">
@@ -713,135 +715,124 @@
             tbody.innerHTML = html;
         }
 
-        function populateMonthDropdown() {
-            const select = document.getElementById('dashboard-month-selector');
-            const savedValue = select.value;
-            select.innerHTML = '<option value="all">ทั้งหมด</option>';
+// แก้ไขฟังก์ชัน populateMonthDropdown ให้ไม่ต้องสร้าง option เป็นรายเดือนตัวๆ
+function populateMonthDropdown() {
+    const select = document.getElementById('dashboard-month-selector');
+    // โค้ดเดิมที่เคยสั่ง loop สร้างเดือนยาวๆ ให้ลบออกหรือใช้แค่ select.onchange ได้เลยครับ
+    select.onchange = renderMonthlyStats;
+}
 
-            const months = new Set();
-            fuelLogs.forEach(log => { if (log.date) months.add(log.date.substring(0, 7)); });
-            maintLogs.forEach(log => { if (log.date) months.add(log.date.substring(0, 7)); });
+// แก้ไขฟังก์ชัน renderMonthlyStats ในส่วนของการจัดการกับช่วงเวลา (ตัวแปร sortedMonths)
+function renderMonthlyStats() {
+    const selectedRange = document.getElementById('dashboard-month-selector').value;
+    const ctx = document.getElementById('expenseChart');
+    
+    if (!ctx) return;
 
-            const sortedMonths = Array.from(months).sort((a,b) => b.localeCompare(a));
-            sortedMonths.forEach(m => {
-                const dateObj = new Date(m + "-01");
-                const label = dateObj.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
-                const option = document.createElement('option');
-                option.value = m;
-                option.textContent = label;
-                select.appendChild(option);
-            });
+    const monthlyData = {};
+    const addData = (month, type, amount) => {
+        if (!monthlyData[month]) monthlyData[month] = { fuel: 0, lpg: 0, maint: 0 };
+        if (type === 'LPG') monthlyData[month].lpg += amount;
+        else if (type === 'Gasoline') monthlyData[month].fuel += amount;
+        else if (type === 'maintenance') monthlyData[month].maint += amount;
+    };
 
-            if (sortedMonths.includes(savedValue)) select.value = savedValue;
-            select.onchange = renderMonthlyStats;
-        }
+    fuelLogs.forEach(log => { if(log.date) addData(log.date.substring(0, 7), log.type, log.totalPaid); });
+    maintLogs.forEach(log => { if(log.date) addData(log.date.substring(0, 7), 'maintenance', log.cost); });
 
-        // 📊 ฟังก์ชันวาดกราฟแท่งเปรียบเทียบค่าใช้จ่ายรายเดือนแบบรวม (Stacked Bar Chart ด้วย Chart.js)
-        function renderMonthlyStats() {
-            const selectedMonth = document.getElementById('dashboard-month-selector').value;
-            const ctx = document.getElementById('expenseChart');
-            
-            if (!ctx) return;
+    // --- ตรงนี้คือจุดที่แก้ไขหลักเพื่อรองรับการเลือก 6 เดือน / 1 ปี / ทั้งหมด ---
+    let sortedMonths = Object.keys(monthlyData).sort((a, b) => a.localeCompare(b));
+    
+    if (selectedRange !== 'all') {
+        const monthsToKeep = parseInt(selectedRange);
+        sortedMonths = sortedMonths.slice(-monthsToKeep); // ดึงเฉพาะ 6 หรือ 12 เดือนล่าสุดจากท้ายอาร์เรย์
+    }
+    // -------------------------------------------------------------
 
-            const monthlyData = {};
-            const addData = (month, type, amount) => {
-                if (!monthlyData[month]) monthlyData[month] = { fuel: 0, lpg: 0, maint: 0 };
-                if (type === 'LPG') monthlyData[month].lpg += amount;
-                else if (type === 'Gasoline') monthlyData[month].fuel += amount;
-                else if (type === 'maintenance') monthlyData[month].maint += amount;
-            };
+    if (sortedMonths.length === 0) {
+        if (expenseChartInstance) expenseChartInstance.destroy();
+        return;
+    }
 
-            fuelLogs.forEach(log => { if(log.date) addData(log.date.substring(0, 7), log.type, log.totalPaid); });
-            maintLogs.forEach(log => { if(log.date) addData(log.date.substring(0, 7), 'maintenance', log.cost); });
+    const labels = sortedMonths.map(m => {
+        return new Date(m + "-01").toLocaleDateString('th-TH', { month: 'short', year: '2-digit' });
+    });
 
-            // เรียงลำดับเดือนจากอดีตไปปัจจุบันเพื่อให้กราฟแสดงผลสวยงาม
-            let sortedMonths = Object.keys(monthlyData).sort((a, b) => a.localeCompare(b));
-            if (selectedMonth !== 'all') sortedMonths = sortedMonths.filter(m => m === selectedMonth);
+    const fuelDataset = sortedMonths.map(m => Math.ceil(monthlyData[m].fuel));
+    const lpgDataset = sortedMonths.map(m => Math.ceil(monthlyData[m].lpg));
+    const maintDataset = sortedMonths.map(m => Math.ceil(monthlyData[m].maint));
 
-            if (sortedMonths.length === 0) {
-                if (expenseChartInstance) expenseChartInstance.destroy();
-                return;
-            }
+    if (expenseChartInstance) {
+        expenseChartInstance.destroy();
+    }
 
-            const labels = sortedMonths.map(m => {
-                return new Date(m + "-01").toLocaleDateString('th-TH', { month: 'short', year: '2-digit' });
-            });
-
-            const fuelDataset = sortedMonths.map(m => Math.ceil(monthlyData[m].fuel));
-            const lpgDataset = sortedMonths.map(m => Math.ceil(monthlyData[m].lpg));
-            const maintDataset = sortedMonths.map(m => Math.ceil(monthlyData[m].maint));
-
-            if (expenseChartInstance) {
-                expenseChartInstance.destroy();
-            }
-
-            expenseChartInstance = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            label: 'น้ำมันทั่วไป',
-                            data: fuelDataset,
-                            backgroundColor: '#3b82f6', 
-                            borderRadius: 4
-                        },
-                        {
-                            label: 'แก็ส LPG',
-                            data: lpgDataset,
-                            backgroundColor: '#22c55e', 
-                            borderRadius: 4
-                        },
-                        {
-                            label: 'ค่าซ่อมบำรุง',
-                            data: maintDataset,
-                            backgroundColor: '#f59e0b', 
-                            borderRadius: 4
-                        }
-                    ]
+    expenseChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'น้ำมันทั่วไป',
+                    data: fuelDataset,
+                    backgroundColor: '#3b82f6', 
+                    borderRadius: 4
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: {
-                            stacked: true, 
-                            grid: { display: false },
-                            ticks: { font: { family: 'Sarabun', size: 10 } }
-                        },
-                        y: {
-                            stacked: true, 
-                            grid: { color: '#e5e7eb' },
-                            ticks: { 
-                                font: { family: 'Sarabun', size: 10 },
-                                callback: function(value) { return value.toLocaleString() + ' ฿'; }
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            position: 'top',
-                            labels: {
-                                font: { family: 'Sarabun', size: 10, weight: 'bold' },
-                                boxWidth: 12
-                            }
-                        },
-                        tooltip: {
-                            titleFont: { family: 'Sarabun', size: 11 },
-                            bodyFont: { family: 'Sarabun', size: 11 },
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) label += ': ';
-                                    if (context.raw !== null) label += context.raw.toLocaleString() + ' บาท';
-                                    return label;
-                                }
-                            }
+                {
+                    label: 'แก็ส LPG',
+                    data: lpgDataset,
+                    backgroundColor: '#22c55e', 
+                    borderRadius: 4
+                },
+                {
+                    label: 'ค่าซ่อมบำรุง',
+                    data: maintDataset,
+                    backgroundColor: '#f59e0b', 
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    stacked: true, 
+                    grid: { display: false },
+                    ticks: { font: { family: 'Sarabun', size: 10 } }
+                },
+                y: {
+                    stacked: true, 
+                    grid: { color: '#e5e7eb' },
+                    ticks: { 
+                        font: { family: 'Sarabun', size: 10 },
+                        callback: function(value) { return value.toLocaleString() + ' ฿'; }
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        font: { family: 'Sarabun', size: 10, weight: 'bold' },
+                        boxWidth: 12
+                    }
+                },
+                tooltip: {
+                    titleFont: { family: 'Sarabun', size: 11 },
+                    bodyFont: { family: 'Sarabun', size: 11 },
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) label += ': ';
+                            if (context.raw !== null) label += context.raw.toLocaleString() + ' บาท';
+                            return label;
                         }
                     }
                 }
-            });
+            }
         }
+    });
+}
 
         function renderFuelHistory() {
             const list = document.getElementById('fuel-history-list');
