@@ -638,7 +638,7 @@
             renderMaintHistory();
         }
 
-                // เปลี่ยนฟังก์ชัน calculateNextCheckUpPlan ให้ Loop แสดงรายการที่ถึงกำหนดทั้งหมด
+                // คัดลอกโค้ดฟังก์ชันนี้ไปวางทับตัวเดิมในแท็ก <script> ได้เลยครับ
                 function calculateNextCheckUpPlan(currentMileage) {
                     const alertBox = document.getElementById('smart-alert-box');
                     const alertTitle = document.getElementById('dash-alert-next-title');
@@ -646,13 +646,21 @@
                     const nextBudget = document.getElementById('dash-next-budget');
                     const budgetRow = document.getElementById('dash-budget-row');
                 
-                    //ดึงรายการที่เคยเคลียร์แล้วจาก LocalStorage มาทำเป็นเซตเพื่อตรวจสอบ
-                    const clearedIds = JSON.parse(localStorage.getItem('cleared_maint_ids') || "[]");
+                    if (!alertBox || !alertTitle || !nextItemsList) return; // ป้องกันสคริปต์ค้างถ้าหน้าจอยังโหลดไม่เสร็จ
                 
-                    // กรองหาประวัติการซ่อมบำรุง "ทั้งหมด" ที่บันทึกไว้และยังไม่ได้กดเคลียร์ (ทำรายการแล้ว)
-                    const activeAlertLogs = maintLogs.filter(log => !clearedIds.includes(log.id));
+                    // ดึงอาเรย์ไอดีที่เคยเคลียร์แล้วออกมาตรวจสอบ ป้องกัน Error ถ้า LocalStorage ว่างเปล่า
+                    let clearedIds = [];
+                    try {
+                        clearedIds = JSON.parse(localStorage.getItem('cleared_maint_ids')) || [];
+                        if (!Array.isArray(clearedIds)) clearedIds = [];
+                    } catch(e) {
+                        clearedIds = [];
+                    }
                 
-                    // กรณีที่ไม่มีรายการค้างคา หรือกดทำครบหมดแล้ว -> ให้ดึงตามรอบคู่มือมาตรฐาน 10,000 กม. ถัดไปอัตโนมัติ
+                    // กรองประวัติซ่อมบำรุงที่ยังไม่ได้กดเคลียร์
+                    const activeAlertLogs = maintLogs.filter(log => log && log.id && !clearedIds.includes(log.id));
+                
+                    // 1. กรณีที่ไม่มีรายการค้างคา -> ดึงตามรอบคู่มือมาตรฐาน 10,000 กม. ถัดไป
                     if (activeAlertLogs.length === 0) {
                         alertBox.classList.remove('hidden');
                         alertBox.className = "bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-4 shadow-sm border border-orange-200";
@@ -670,33 +678,35 @@
                         });
                         
                         nextItemsList.innerHTML = html || '<div class="text-gray-400 text-center py-2 text-xs">ไม่มีรายการแจ้งเตือนด่วน</div>';
-                        nextBudget.innerText = `${Math.ceil(totalBudget).toLocaleString()} บาท`;
-                        budgetRow.classList.remove('hidden');
+                        if (nextBudget) nextBudget.innerText = `${Math.ceil(totalBudget).toLocaleString()} บาท`;
+                        if (budgetRow) budgetRow.classList.remove('hidden');
                         return;
                     }
                 
-                    // หากมีรายการที่บันทึกค้างอยู่ ให้เปลี่ยนหัวข้อหลักและซ่อนแถวงบประมาณคาดการณ์อัตโนมัติ
-                    budgetRow.classList.add('hidden');
+                    // 2. หากมีรายการค้างอยู่
+                    if (budgetRow) budgetRow.classList.add('hidden');
                     alertTitle.innerHTML = `<p class="text-gray-800 font-bold text-xs flex items-center"><i class="fa-solid fa-bell text-orange-500 mr-1"></i> รายการซ่อมบำรุงที่ถึงกำหนด / ค้างอยู่ (${activeAlertLogs.length} รายการ)</p>`;
                 
                     let htmlList = "";
-                    let baseAlertClass = "bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-4 shadow-sm border border-orange-200";
-                    let hasUrgentAlert = false; // ตัวแปรเช็คว่ามีรายการใดเลยกำหนดหรือยังเพื่อทำเอฟเฟกต์สีแดงเตือน
+                    let hasUrgentAlert = false;
                 
-                    // ทำการ Loop ตรวจสอบประวัติทุกตัวที่ยังไม่ได้กดเคลียร์เพื่อนำมาแสดงผลเป็น Card
                     activeAlertLogs.forEach(log => {
-                        // คำนวณหาวันที่ครบกำหนด
+                        if (!log.date) return;
+                        
+                        // คำนวณวันที่ครบกำหนดแบบปลอดภัย ป้องกันค่าว่าง (Fallback ไปที่ 6 เดือน)
+                        const monthsToAdd = parseInt(log.nextInMonths) || 6;
                         const maintDate = new Date(log.date);
-                        maintDate.setMonth(maintDate.getMonth() + parseInt(log.nextInMonths || 6));
+                        maintDate.setMonth(maintDate.getMonth() + monthsToAdd);
                         
                         const today = new Date();
                         today.setHours(0,0,0,0);
                         const diffTime = maintDate - today;
                         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                         
-                        const kmRemaining = log.nextDueMileage - currentMileage;
+                        // ตรวจสอบระยะกิโลเมตรแบบปลอดภัย ป้องกันค่า NaN
+                        const targetKm = parseInt(log.nextDueMileage) || (parseInt(log.mileage) + (parseInt(log.nextInKm) || 10000));
+                        const kmRemaining = targetKm - currentMileage;
                         
-                        // เงื่อนไขแจ้งเตือนด่วน (เหลือน้อยกว่า 500 กม. หรือ น้อยกว่า 15 วัน หรือติดลบแปลว่าเลยแล้ว)
                         const isKmDue = kmRemaining <= 500;
                         const isDateDue = diffDays <= 15;
                         const isOverDue = kmRemaining <= 0 || diffDays <= 0;
@@ -716,13 +726,12 @@
                         if (kmRemaining <= 0) kmText = `เลยกำหนดมาแล้ว ${Math.abs(kmRemaining).toLocaleString()} กม.`;
                         if (diffDays <= 0) dateText = `เลยกำหนดมาแล้ว ${Math.abs(diffDays)} วัน`;
                 
-                        // สร้าง HTML Card ย่อยแยกของแต่ละรายการ พร้อมปุ่มกดเคลียร์รายตัว
                         htmlList += `
                         <div class="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-1.5 text-[11px] relative">
                             <div class="flex justify-between items-start">
                                 <div class="pr-16">
-                                    <p class="font-bold text-xs text-indigo-900">🔧 ${log.category}</p>
-                                    <p class="text-gray-500 italic text-[10px]">โน้ต: ${log.details}</p>
+                                    <p class="font-bold text-xs text-indigo-900">🔧 ${log.category || 'ไม่ระบุประเภท'}</p>
+                                    <p class="text-gray-500 italic text-[10px]">โน้ต: ${log.details || '-'}</p>
                                 </div>
                                 <button onclick="confirmSingleMaintDone('${log.id}')" class="absolute top-2 right-2 bg-green-600 hover:bg-green-700 text-white text-[9px] font-bold px-2 py-1 rounded shadow-sm transition">
                                     <i class="fa-solid fa-check"></i> ทำแล้ว
@@ -731,7 +740,7 @@
                             <div class="grid grid-cols-2 gap-2 pt-1 border-t border-gray-100 text-gray-700">
                                 <div>
                                     <span class="font-semibold">เป้าหมายกิโลเมตร:</span>
-                                    <p class="font-bold text-gray-900">${log.nextDueMileage.toLocaleString()} กม.</p>
+                                    <p class="font-bold text-gray-900">${targetKm.toLocaleString()} กม.</p>
                                     <span class="px-1 py-0.2 rounded-md text-[9px] ${badgeColor}">${kmText}</span>
                                 </div>
                                 <div>
@@ -743,32 +752,15 @@
                         </div>`;
                     });
                 
-                    // ปรับสีพื้นหลังของกล่อง Alert ภาพรวมให้เด่นชัดขึ้นหากมีรายการใดอันหนึ่งด่วนหรือเลยกำหนด
                     if (hasUrgentAlert) {
                         alertBox.className = "bg-gradient-to-br from-red-50 to-orange-50 rounded-2xl p-4 shadow-sm border border-red-200";
                     } else {
-                        alertBox.className = baseAlertClass;
+                        alertBox.className = "bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-4 shadow-sm border border-orange-200";
                     }
                 
                     nextItemsList.innerHTML = htmlList;
                     alertBox.classList.remove('hidden');
                 }
-                
-                // ฟังก์ชันกดยืนยันทำรายการแล้วแยกเป็นรายชิ้นงาน
-                function confirmSingleMaintDone(maintId) {
-                    if (!maintId) return;
-                    
-                    // ดึงอาเรย์ไอดีที่เคยเคลียร์แล้วออกมา เพิ่มไอดีใหม่เข้าไป แล้วเซฟกลับลง LocalStorage
-                    let clearedIds = JSON.parse(localStorage.getItem('cleared_maint_ids') || "[]");
-                    if (!clearedIds.includes(maintId)) {
-                        clearedIds.push(maintId);
-                        localStorage.setItem('cleared_maint_ids', JSON.stringify(clearedIds));
-                    }
-                    
-                    showToast("บันทึกการทำรายการเสร็จสิ้น และปิดการแจ้งเตือนนี้แล้ว", true);
-                    updateDashboard(); // สั่งรีเฟรชหน้าจอสรุปผลเพื่อคำนวณและตัดรายการนั้นออก
-                }
-
         function populateMasterScheduleTable() {
             const tbody = document.getElementById('maintenance-schedule-tbody');
             let html = "";
