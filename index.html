@@ -225,67 +225,71 @@
     <div id="custom-toast" class="fixed top-4 left-1/2 -translate-x-1/2 hidden bg-gray-900 text-white px-4 py-3 rounded-2xl shadow-xl z-50"></div>
 
     <script>
-        // ==================== Master Data ====================
-        const MasterMaintenanceItems = [
-            { id: 1, name: "น้ำมันเครื่อง (0W20)", qty: 4.2, price: 299, interval: 10000 },
-            { id: 2, name: "แหวนรองน็อตถ่ายน้ำมันเครื่อง", qty: 1.0, price: 20, interval: 10000 },
-            { id: 3, name: "กรองน้ำมันเครื่อง", qty: 1.0, price: 224, interval: 20000 },
-            { id: 4, name: "ไส้กรองอากาศ แอร์", qty: 1.0, price: 671, interval: 20000 },
-            { id: 5, name: "ไส้กรองอากาศ", qty: 1.0, price: 560, interval: 30000 },
-            { id: 6, name: "น้ำมันเกียร์อัตโนมัติ CVT HCF2", qty: 3.7, price: 191, interval: 40000 },
-            { id: 7, name: "แหวนถ่ายน้ำมันเกียร์", qty: 1.0, price: 35, interval: 40000 },
-            { id: 8, name: "หัวเทียน", qty: 4.0, price: 750, interval: 60000 },
-            { id: 9, name: "น้ำมันเบรก", qty: 1.0, price: 130, interval: 60000 },
-            { id: 10, name: "กรองน้ำมันเชื้อเพลิง", qty: 1.0, price: 1420, interval: 110000 },
-            { id: 11, name: "แหวนล็อคท่อน้ำมันเบนซิน", qty: 1.0, price: 38, interval: 110000 },
-            { id: 12, name: "น้ำยาหม้อน้ำ", qty: 6.5, price: 165, interval: 200000 },
-            { id: 13, name: "น็อตถ่ายน้ำยาหม้อน้ำ", qty: 1.0, price: 46, interval: 200000 }
-        ];
+        // ==================== CONFIG ====================
+        let gsheetUrl = "https://script.google.com/macros/s/AKfycby1MevyU-WBDFyiSLDCQj8IF7172rAQKIwEZ85Uhx1T2OKvRoZeD4NO6diWFbjFt544kw/exec";
 
         let fuelLogs = [];
         let maintLogs = [];
         let activeFuelType = "Gasoline";
         let expenseChartInstance = null;
-        let gsheetUrl = "https://script.google.com/macros/s/AKfycby1MevyU-WBDFyiSLDCQj8IF7172rAQKIwEZ85Uhx1T2OKvRoZeD4NO6diWFbjFt544kw/exec";
 
-        // ==================== Core Functions ====================
-        function switchTab(tab) {
-            document.querySelectorAll('section[id^="tab-"]').forEach(s => s.classList.add('hidden'));
-            document.getElementById(`tab-${tab}`).classList.remove('hidden');
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active', 'text-indigo-600'));
-            document.getElementById(`nav-${tab}`).classList.add('active', 'text-indigo-600');
-            if (tab === 'dashboard') updateDashboard();
+        // ==================== JSONP ดึงข้อมูล ====================
+        function fetchCloudData() {
+            if (!gsheetUrl) return;
+            document.getElementById('connection-status').innerHTML = '🔄 กำลังซิงค์...';
+
+            const callbackName = 'cb_' + Date.now();
+            window[callbackName] = function(data) {
+                if (data && data.fuel) fuelLogs = data.fuel;
+                if (data && data.maintenance) maintLogs = data.maintenance;
+                document.getElementById('connection-status').innerHTML = '✅ เชื่อมต่อแล้ว';
+                showToast("ซิงค์ข้อมูลสำเร็จ", true);
+                updateDashboard();
+                delete window[callbackName];
+            };
+
+            const script = document.createElement('script');
+            script.src = gsheetUrl + '?callback=' + callbackName;
+            document.head.appendChild(script);
+
+            setTimeout(() => {
+                if (window[callbackName]) delete window[callbackName];
+            }, 15000);
         }
 
-        function showToast(message, isSuccess = true) {
-            const toast = document.getElementById('custom-toast');
-            toast.textContent = message;
-            toast.classList.toggle('bg-green-600', isSuccess);
-            toast.classList.toggle('bg-red-600', !isSuccess);
-            toast.classList.remove('hidden');
-            setTimeout(() => toast.classList.add('hidden'), 3000);
+        // ==================== ส่งข้อมูลไป Sheets ====================
+        function syncWithGSheets(sheetType, data) {
+            if (!gsheetUrl) return;
+            const payload = { action: "addData", sheetName: sheetType, ...data };
+
+            fetch(gsheetUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            })
+            .then(() => {
+                showToast("ส่งข้อมูลไป Google Sheet สำเร็จ", true);
+                setTimeout(fetchCloudData, 1000);
+            })
+            .catch(() => showToast("บันทึก Local สำเร็จ", false));
         }
 
-        function toggleVisibility(id) {
-            document.getElementById(id).classList.toggle('hidden');
-        }
-
-        // ==================== LPG Calculation ====================
+        // ==================== LPG ====================
         function selectFuelType(type) {
             activeFuelType = type;
-            const gasBtn = document.getElementById('btn-fuel-gasoline');
-            const lpgBtn = document.getElementById('btn-fuel-lpg');
+            const gas = document.getElementById('btn-fuel-gasoline');
+            const lpg = document.getElementById('btn-fuel-lpg');
             if (type === 'Gasoline') {
-                gasBtn.classList.add('border-indigo-600','bg-indigo-50','text-indigo-900');
-                gasBtn.classList.remove('border-gray-200','bg-white','text-gray-600');
-                lpgBtn.classList.remove('border-indigo-600','bg-indigo-50','text-indigo-900');
-                lpgBtn.classList.add('border-gray-200','bg-white','text-gray-600');
+                gas.classList.add('border-indigo-600','bg-indigo-50','text-indigo-900');
+                gas.classList.remove('border-gray-200','bg-white','text-gray-600');
+                lpg.classList.remove('border-indigo-600','bg-indigo-50','text-indigo-900');
+                lpg.classList.add('border-gray-200','bg-white','text-gray-600');
                 document.getElementById('lpg-discount-row').classList.add('hidden');
             } else {
-                lpgBtn.classList.add('border-indigo-600','bg-indigo-50','text-indigo-900');
-                lpgBtn.classList.remove('border-gray-200','bg-white','text-gray-600');
-                gasBtn.classList.remove('border-indigo-600','bg-indigo-50','text-indigo-900');
-                gasBtn.classList.add('border-gray-200','bg-white','text-gray-600');
+                lpg.classList.add('border-indigo-600','bg-indigo-50','text-indigo-900');
+                lpg.classList.remove('border-gray-200','bg-white','text-gray-600');
+                gas.classList.remove('border-indigo-600','bg-indigo-50','text-indigo-900');
+                gas.classList.add('border-gray-200','bg-white','text-gray-600');
                 document.getElementById('lpg-discount-row').classList.remove('hidden');
             }
             calculateFuelVolume();
@@ -294,7 +298,6 @@
         function calculateFuelVolume() {
             const amount = parseFloat(document.getElementById('fuel-amount').value) || 0;
             const price = parseFloat(document.getElementById('fuel-price-per-liter').value) || 0;
-
             document.getElementById('calc-raw-liters').innerText = (amount && price ? (amount/price).toFixed(3) : "0.00") + " ลิตร";
 
             let discount = 0, final = amount;
@@ -306,26 +309,34 @@
             document.getElementById('calc-actual-pay').innerText = final.toFixed(2) + " บาท";
         }
 
-        // ==================== Form Submit ====================
-        document.getElementById('fuel-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            showToast("บันทึกการเติมเชื้อเพลิงสำเร็จ", true);
-            updateDashboard();
-        });
+        // ==================== Tab & Toast ====================
+        function switchTab(tab) {
+            document.querySelectorAll('section[id^="tab-"]').forEach(s => s.classList.add('hidden'));
+            document.getElementById(`tab-${tab}`).classList.remove('hidden');
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active', 'text-indigo-600'));
+            document.getElementById(`nav-${tab}`).classList.add('active', 'text-indigo-600');
+            if (tab === 'dashboard') updateDashboard();
+        }
 
-        document.getElementById('maintenance-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            showToast("บันทึกการซ่อมบำรุงสำเร็จ", true);
-            updateDashboard();
-        });
+        function showToast(message, success = true) {
+            const toast = document.getElementById('custom-toast');
+            toast.textContent = message;
+            toast.classList.toggle('bg-green-600', success);
+            toast.classList.toggle('bg-red-600', !success);
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3000);
+        }
+
+        function toggleVisibility(id) {
+            document.getElementById(id).classList.toggle('hidden');
+        }
 
         function updateDashboard() {
             renderPendingMaintenance();
         }
 
         function renderPendingMaintenance() {
-            const container = document.getElementById('pending-maint-list');
-            container.innerHTML = `<p class="text-center text-gray-400 py-8">ยังไม่มีรายการรอยืนยัน</p>`;
+            document.getElementById('pending-maint-list').innerHTML = `<p class="text-center text-gray-400 py-8">ยังไม่มีรายการรอยืนยัน</p>`;
         }
 
         // Load
@@ -334,6 +345,7 @@
             document.getElementById('maint-date').value = new Date().toISOString().split('T')[0];
             switchTab('dashboard');
             selectFuelType('Gasoline');
+            fetchCloudData();
         });
     </script>
 </body>
