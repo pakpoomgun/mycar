@@ -416,6 +416,8 @@
             localStorage.setItem('carcare_maint_logs', JSON.stringify(maintLogs));
         }
 
+        // ✅ FIX: ใช้ JSONP แทน fetch เพื่อเลี่ยง CORS
+        // Apps Script รองรับ ?callback= parameter สำหรับ JSONP โดยตรง
         function fetchCloudData() {
             if (!gsheetUrl) {
                 document.getElementById('connection-status').innerHTML = '<i class="fa-solid fa-circle text-orange-400 mr-1 animate-pulse"></i> โหมดออฟไลน์ (Local)';
@@ -425,20 +427,24 @@
 
             document.getElementById('connection-status').innerHTML = '<i class="fa-solid fa-arrows-rotate fa-spin mr-1 text-yellow-400"></i> กำลังซิงค์คลาวด์...';
 
-            // ✅ FIX: GET request ไม่ควรส่ง Content-Type → ป้องกัน CORS Preflight
-            fetch(gsheetUrl, {
-                method: "GET",
-                redirect: "follow"
-            })
-            .then(response => {
-                if (!response.ok) throw new Error("Network response was not ok");
-                return response.json();
-            })
-            .then(data => {
+            const callbackName = 'gsheetCb_' + Date.now();
+            const oldScript = document.getElementById('jsonp-loader');
+            if (oldScript) oldScript.remove();
+
+            // Timeout 10 วินาที กัน script โหลดค้าง
+            const timer = setTimeout(() => {
+                delete window[callbackName];
+                document.getElementById('connection-status').innerHTML = '<i class="fa-solid fa-triangle-exclamation text-red-400 mr-1 animate-pulse"></i> หมดเวลาเชื่อมต่อ';
+                showToast("ไม่สามารถดึงข้อมูลได้ชั่วคราว ดำเนินการผ่านโหมดออฟไลน์", false);
+                updateDashboard();
+            }, 10000);
+
+            window[callbackName] = function(data) {
+                clearTimeout(timer);
+                delete window[callbackName];
+
                 if (data && (data.fuel || data.maintenance)) {
                     if (data.fuel && data.fuel.length > 0) {
-                        // ✅ FIX: แปลง field ตัวเลขให้ถูกต้องทันทีที่รับจาก Sheets
-                        // Google Sheets บางครั้งส่งตัวเลขมาเป็น string ทำให้กราฟพัง
                         fuelLogs = data.fuel.map(log => ({
                             ...log,
                             mileage: parseFloat(log.mileage) || 0,
@@ -458,22 +464,26 @@
                             nextDueMileage: parseFloat(log.nextDueMileage) || 0,
                         })).sort((a,b) => b.date.localeCompare(a.date));
                     }
-                    
                     saveLocalData();
                     showToast("ซิงค์สถิติจาก Google Sheets เรียบร้อยแล้ว!", true);
-                    
                     document.getElementById('connection-status').innerHTML = '<i class="fa-solid fa-cloud text-green-400 mr-1"></i> เชื่อมต่อคลาวด์แล้ว';
                 } else {
                     document.getElementById('connection-status').innerHTML = '<i class="fa-solid fa-cloud text-green-400 mr-1"></i> เชื่อมต่อคลาวด์แล้ว (ชีตว่าง)';
                 }
                 updateDashboard();
-            })
-            .catch(error => {
-                console.error("Error fetching data: ", error);
+            };
+
+            const script = document.createElement('script');
+            script.id = 'jsonp-loader';
+            script.onerror = () => {
+                clearTimeout(timer);
+                delete window[callbackName];
                 document.getElementById('connection-status').innerHTML = '<i class="fa-solid fa-triangle-exclamation text-red-400 mr-1 animate-pulse"></i> เกิดข้อผิดพลาด';
                 showToast("ไม่สามารถดึงข้อมูลเก่าได้ชั่วคราว ดำเนินการผ่านโหมดออฟไลน์", false);
-                updateDashboard(); 
-            });
+                updateDashboard();
+            };
+            script.src = gsheetUrl + '?callback=' + callbackName;
+            document.head.appendChild(script);
         }
 
         function switchTab(tabId) {
