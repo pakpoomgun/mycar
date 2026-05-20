@@ -964,11 +964,25 @@ function renderMonthlyStats() {
         }
 
         function syncWithGSheets(sheetType, data) {
-            if (!gsheetUrl) return;
-            const payload = { action: "addData", sheetName: sheetType, ...data };
-            fetch(gsheetUrl, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
-            .then(() => showToast(`ส่งข้อมูลไปยัง Google Sheet เรียบร้อย!`, true))
-            .catch(error => { console.error(error); showToast("ไม่สามารถอัพโหลดข้อมูลได้ชั่วคราว", false); });
+          if (!gsheetUrl) return;
+        
+          const payload = { action: "addData", sheetName: sheetType, ...data };
+        
+          // เปลี่ยนวิธี Fetch ให้ส่งแบบปกติเพื่อส่งสัญญาณให้ Google Script ปิด Task ได้เร็วขึ้น
+          fetch(gsheetUrl, { 
+            method: "POST", 
+            headers: { 
+              "Content-Type": "text/plain;charset=utf-8" // ใช้ text/plain เพื่อเลี่ยงปัญหา CORS Preflight ที่ทำให้ช้า
+            }, 
+            body: JSON.stringify(payload) 
+          })
+          .then(response => {
+            showToast("ส่งข้อมูลไปยัง Google Sheet เรียบร้อย!", true);
+          })
+          .catch(error => { 
+            console.error("Sync Error:", error); 
+            showToast("ไม่สามารถอัพโหลดข้อมูลได้ชั่วคราว", false); 
+          });
         }
 
         function showToast(message, isSuccess = true) {
