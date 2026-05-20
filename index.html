@@ -437,10 +437,26 @@
             .then(data => {
                 if (data && (data.fuel || data.maintenance)) {
                     if (data.fuel && data.fuel.length > 0) {
-                        fuelLogs = data.fuel.sort((a,b) => b.date.localeCompare(a.date));
+                        // ✅ FIX: แปลง field ตัวเลขให้ถูกต้องทันทีที่รับจาก Sheets
+                        // Google Sheets บางครั้งส่งตัวเลขมาเป็น string ทำให้กราฟพัง
+                        fuelLogs = data.fuel.map(log => ({
+                            ...log,
+                            mileage: parseFloat(log.mileage) || 0,
+                            totalPaid: parseFloat(log.totalPaid) || 0,
+                            pricePerLiter: parseFloat(log.pricePerLiter) || 0,
+                            calculatedLiters: parseFloat(log.calculatedLiters) || 0,
+                            discount: parseFloat(log.discount) || 0,
+                        })).sort((a,b) => b.date.localeCompare(a.date));
                     }
                     if (data.maintenance && data.maintenance.length > 0) {
-                        maintLogs = data.maintenance.sort((a,b) => b.date.localeCompare(a.date));
+                        maintLogs = data.maintenance.map(log => ({
+                            ...log,
+                            mileage: parseFloat(log.mileage) || 0,
+                            cost: parseFloat(log.cost) || 0,
+                            nextInKm: parseFloat(log.nextInKm) || 0,
+                            nextInMonths: parseFloat(log.nextInMonths) || 6,
+                            nextDueMileage: parseFloat(log.nextDueMileage) || 0,
+                        })).sort((a,b) => b.date.localeCompare(a.date));
                     }
                     
                     saveLocalData();
@@ -780,11 +796,14 @@ function renderMonthlyStats() {
     if (!ctx) return;
 
     const monthlyData = {};
+    // ✅ FIX: แปลงค่าให้เป็นตัวเลขเสมอ ป้องกัน NaN/null/string ทำให้ Chart.js วาด path ผิดพลาด
+    const safeNum = (v) => { const n = parseFloat(v); return isFinite(n) ? n : 0; };
     const addData = (month, type, amount) => {
         if (!monthlyData[month]) monthlyData[month] = { fuel: 0, lpg: 0, maint: 0 };
-        if (type === 'LPG') monthlyData[month].lpg += amount;
-        else if (type === 'Gasoline') monthlyData[month].fuel += amount;
-        else if (type === 'maintenance') monthlyData[month].maint += amount;
+        const safeAmount = safeNum(amount);
+        if (type === 'LPG') monthlyData[month].lpg += safeAmount;
+        else if (type === 'Gasoline') monthlyData[month].fuel += safeAmount;
+        else if (type === 'maintenance') monthlyData[month].maint += safeAmount;
     };
 
     fuelLogs.forEach(log => { if(log.date) addData(log.date.substring(0, 7), log.type, log.totalPaid); });
