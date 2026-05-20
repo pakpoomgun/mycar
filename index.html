@@ -425,12 +425,10 @@
 
             document.getElementById('connection-status').innerHTML = '<i class="fa-solid fa-arrows-rotate fa-spin mr-1 text-yellow-400"></i> กำลังซิงค์คลาวด์...';
 
+            // ✅ FIX: GET request ไม่ควรส่ง Content-Type → ป้องกัน CORS Preflight
             fetch(gsheetUrl, {
                 method: "GET",
-                redirect: "follow", 
-                headers: {
-                    "Content-Type": "text/plain;charset=utf-8"
-                }
+                redirect: "follow"
             })
             .then(response => {
                 if (!response.ok) throw new Error("Network response was not ok");
@@ -815,7 +813,13 @@ function renderMonthlyStats() {
     const maintDataset = sortedMonths.map(m => Math.ceil(monthlyData[m].maint));
 
     if (expenseChartInstance) {
-        expenseChartInstance.destroy();
+        // ✅ FIX: อัปเดตข้อมูลกราฟแทนการ destroy แล้วสร้างใหม่ → เร็วกว่ามาก ไม่กระพริบ
+        expenseChartInstance.data.labels = labels;
+        expenseChartInstance.data.datasets[0].data = fuelDataset;
+        expenseChartInstance.data.datasets[1].data = lpgDataset;
+        expenseChartInstance.data.datasets[2].data = maintDataset;
+        expenseChartInstance.update();
+        return;
     }
 
     expenseChartInstance = new Chart(ctx, {
@@ -888,20 +892,20 @@ function renderMonthlyStats() {
 
         function renderFuelHistory() {
             const list = document.getElementById('fuel-history-list');
-            list.innerHTML = "";
             if (fuelLogs.length === 0) {
                 list.innerHTML = `<div class="text-center text-xs text-gray-400 py-4">ไม่มีประวัติการเติมเชื้อเพลิง</div>`;
                 return;
             }
-            fuelLogs.forEach((log) => {
+            // ✅ FIX: ใช้ join() แทน innerHTML += เพื่อ render DOM ครั้งเดียว เร็วกว่าเดิมมาก
+            list.innerHTML = fuelLogs.map((log) => {
                 const isLPG = log.type === 'LPG';
                 const formattedDate = new Date(log.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
-                list.innerHTML += `
+                return `
                 <div class="flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100">
                     <div>
                         <div class="flex items-center space-x-1">
                             <span class="text-xs font-bold text-gray-800">${formattedDate}</span>
-                            <span class="text-[9px] px-1.5 py-0.2 rounded-full font-bold ${isLPG ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}">${log.type}</span>
+                            <span class="text-[9px] px-1.5 py-0.5 rounded-full font-bold ${isLPG ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}">${log.type}</span>
                         </div>
                         <p class="text-[10px] text-gray-400">ไมล์: ${log.mileage.toLocaleString()} กม. | ${log.calculatedLiters.toFixed(2)} ลิตร</p>
                     </div>
@@ -911,19 +915,19 @@ function renderMonthlyStats() {
                         <button onclick="deleteLog('fuel', '${log.id}')" class="text-[10px] text-red-500 hover:text-red-700 font-bold ml-1">ลบ</button>
                     </div>
                 </div>`;
-            });
+            }).join('');
         }
 
         function renderMaintHistory() {
             const list = document.getElementById('maint-history-list');
-            list.innerHTML = "";
             if (maintLogs.length === 0) {
                 list.innerHTML = `<div class="text-center text-xs text-gray-400 py-4">ไม่มีบันทึกประวัติการซ่อมบำรุง</div>`;
                 return;
             }
-            maintLogs.forEach((log) => {
+            // ✅ FIX: ใช้ join() แทน innerHTML += เพื่อ render DOM ครั้งเดียว เร็วกว่าเดิมมาก
+            list.innerHTML = maintLogs.map((log) => {
                 const formattedDate = new Date(log.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
-                list.innerHTML += `
+                return `
                 <div class="flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100">
                     <div>
                         <p class="text-xs font-bold text-gray-800">${log.category}</p>
@@ -936,7 +940,7 @@ function renderMonthlyStats() {
                         <button onclick="deleteLog('maint', '${log.id}')" class="text-[10px] text-red-500 hover:text-red-700 font-bold">ลบ</button>
                     </div>
                 </div>`;
-            });
+            }).join('');
         }
 
         function deleteLog(type, id) {
