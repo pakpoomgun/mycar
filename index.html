@@ -1,352 +1,416 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>บันทึกการเติมน้ำมัน LPG และการซ่อมบำรุงรถยนต์</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body { font-family: 'Sarabun', sans-serif; background-color: #f3f4f6; }
-        .nav-btn.active { color: #4f46e5; font-weight: 600; }
-    </style>
+  <meta charset="UTF-8">
+  <title>Fuel & LPG Tracker</title>
+  <!-- นำเข้า Tailwind CSS เพื่อความสวยงามแบบ Modern และ Chart.js สำหรับวาดกราฟ -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    .tab-active { border-bottom-width: 4px; border-color: #3b82f6; color: #3b82f6; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; }
+  </style>
 </head>
-<body class="pb-24">
+<body class="pb-20">
 
-    <header class="bg-gradient-to-r from-blue-700 to-indigo-800 text-white shadow-md sticky top-0 z-40">
-        <div class="max-w-md mx-auto px-4 py-3 flex justify-between items-center">
-            <div class="flex items-center space-x-2">
-                <i class="fa-solid fa-car-side text-2xl text-yellow-300"></i>
-                <h1 class="font-bold text-lg tracking-wide">CarCare & Fuel Pro</h1>
-            </div>
-            <div class="text-xs bg-indigo-900 px-2.5 py-1.5 rounded-full text-blue-200" id="connection-status">
-                <i class="fa-solid fa-sync fa-spin mr-1 text-yellow-400"></i> กำลังเชื่อมต่อ...
-            </div>
+  <!-- แท็บเมนูด้านบน -->
+  <div class="bg-white shadow sticky top-0 z-50">
+    <div class="flex justify-around text-center text-gray-500 font-medium">
+      <button id="tabDashboardBtn" onclick="switchTab('dashboard')" class="w-1/2 py-4 tab-active">
+        <i class="fa-solid fa-chart-pie mr-2"></i>หน้าแรก / กราฟ
+      </button>
+      <button id="tabFormBtn" onclick="switchTab('form')" class="w-1/2 py-4">
+        <i class="fa-solid fa-gas-pump mr-2"></i>บันทึก & ประวัติ
+      </button>
+    </div>
+  </div>
+
+  <div class="container mx-auto max-w-lg p-4">
+    
+    <!-- ================= SECTION 1: DASHBOARD ================= -->
+    <div id="sectionDashboard" class="space-y-4">
+      <!-- การ์ดสรุปยอด -->
+      <div class="grid grid-cols-2 gap-4">
+        <div class="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-4 text-white shadow-md">
+          <p class="text-xs opacity-80 uppercase tracking-wider">เงินที่ใช้เดือนนี้</p>
+          <p class="text-2xl font-bold mt-1" id="statThisMonth">0.00 <span class="text-sm font-normal">บาท</span></p>
         </div>
-    </header>
-
-    <main class="max-w-md mx-auto px-3 mt-4 space-y-4">
-
-        <!-- DASHBOARD -->
-        <section id="tab-dashboard" class="space-y-4">
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex justify-between items-center">
-                <div>
-                    <p class="text-xs text-gray-500">เลขไมล์สะสมล่าสุด</p>
-                    <p class="text-2xl font-bold text-indigo-900" id="dash-current-mileage">0 <span class="text-sm font-normal text-gray-400">กม.</span></p>
-                </div>
-                <div class="bg-indigo-50 p-3 rounded-full text-indigo-600">
-                    <i class="fa-solid fa-gauge text-xl"></i>
-                </div>
-            </div>
-
-            <div class="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-4 shadow-sm border border-orange-200">
-                <div class="flex items-center space-x-2 text-orange-800 font-bold mb-2">
-                    <i class="fa-solid fa-triangle-exclamation text-lg text-orange-500"></i>
-                    <h2>การเช็คระยะกิโลเมตรถัดไป</h2>
-                </div>
-                <p class="text-xs text-gray-600 mb-3" id="dash-alert-next-title">กำลังคำนวณ...</p>
-                <div class="space-y-2 max-h-48 overflow-y-auto" id="dash-next-items-list"></div>
-                <div class="mt-3 pt-3 border-t border-orange-200 flex justify-between text-xs font-semibold text-orange-950">
-                    <span>งบประมาณที่คาดว่าจะใช้:</span>
-                    <span id="dash-next-budget">0 บาท</span>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-                <div class="flex justify-between items-center mb-3">
-                    <h2 class="font-bold text-gray-800 text-sm">เปรียบเทียบค่าใช้จ่ายรายเดือน</h2>
-                    <select id="dashboard-month-selector" class="text-xs bg-gray-50 border border-gray-300 rounded-lg px-2 py-1">
-                        <option value="all">ทั้งหมด</option>
-                    </select>
-                </div>
-                <div class="relative w-full h-64">
-                    <canvas id="expenseChart"></canvas>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-                <div class="flex items-center space-x-2 font-bold text-gray-800 mb-3">
-                    <i class="fa-solid fa-screwdriver-wrench text-blue-600"></i>
-                    <h2>สืบค้นรอบเช็คระยะเชิงรุก</h2>
-                </div>
-                <div class="flex space-x-2 mb-4">
-                    <input type="number" id="planner-mileage-input" placeholder="ระบุเลขกิโลเมตร (เช่น 20000)" class="flex-1 bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-sm">
-                    <button id="btn-calc-planner" class="bg-indigo-600 text-white rounded-xl px-4 py-2 text-sm font-semibold">ตรวจสอบ</button>
-                </div>
-                <div id="planner-result-box" class="hidden bg-gray-50 rounded-xl p-3 border border-gray-200">
-                    <div class="flex justify-between items-center mb-2 border-b pb-2">
-                        <span class="text-xs font-bold text-indigo-900" id="planner-result-title"></span>
-                        <span class="text-xs font-bold text-red-600" id="planner-result-cost"></span>
-                    </div>
-                    <ul class="text-xs space-y-1.5 text-gray-700" id="planner-result-list"></ul>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-                <button onclick="toggleVisibility('main-schedule-table')" class="w-full flex justify-between items-center text-left font-bold text-gray-800 text-sm">
-                    <span class="flex items-center space-x-2">
-                        <i class="fa-solid fa-list-check text-indigo-600"></i>
-                        <span>ดูตารางมาตรฐานอะไหล่ทั้งหมด</span>
-                    </span>
-                    <i class="fa-solid fa-chevron-down text-gray-400"></i>
-                </button>
-                <div id="main-schedule-table" class="hidden mt-3 overflow-x-auto">
-                    <table class="w-full text-left text-xs text-gray-600 border-collapse">
-                        <thead>
-                            <tr class="bg-gray-100 text-gray-800 font-bold">
-                                <th class="p-2 border">รายการอะไหล่</th>
-                                <th class="p-2 border text-center">รอบ (km)</th>
-                                <th class="p-2 border text-right">ราคาโดยประมาณ</th>
-                            </tr>
-                        </thead>
-                        <tbody id="maintenance-schedule-tbody"></tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-
-        <!-- FUEL -->
-        <section id="tab-fuel" class="hidden space-y-4">
-            <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-                <h2 class="font-bold text-gray-800 text-base mb-4 flex items-center space-x-2">
-                    <i class="fa-solid fa-gas-pump text-indigo-600"></i>
-                    <span>บันทึกการเติมเชื้อเพลิง</span>
-                </h2>
-                <form id="fuel-form" class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 mb-2">ประเภทเชื้อเพลิง</label>
-                        <div class="grid grid-cols-2 gap-2">
-                            <button type="button" id="btn-fuel-gasoline" onclick="selectFuelType('Gasoline')" class="fuel-type-btn py-3 rounded-xl border-2 border-indigo-600 bg-indigo-50 text-indigo-900 font-bold text-sm flex flex-col items-center">
-                                <i class="fa-solid fa-car text-lg mb-1"></i> น้ำมันทั่วไป
-                            </button>
-                            <button type="button" id="btn-fuel-lpg" onclick="selectFuelType('LPG')" class="fuel-type-btn py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-600 font-bold text-sm flex flex-col items-center">
-                                <i class="fa-solid fa-fire text-lg mb-1"></i> แก็ส LPG
-                            </button>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-500 mb-1">วันที่เติม</label>
-                        <input type="date" id="fuel-date" required class="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-500 mb-1">เลขกิโลเมตรปัจจุบัน</label>
-                        <input type="number" id="fuel-mileage" required class="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2">
-                    </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs font-semibold text-gray-500 mb-1">ยอดเงินรวม (บาท)</label>
-                            <input type="number" id="fuel-amount" required oninput="calculateFuelVolume()" class="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 font-bold">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-gray-500 mb-1">ราคาต่อลิตร</label>
-                            <input type="number" step="0.01" id="fuel-price-per-liter" required oninput="calculateFuelVolume()" class="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 font-bold">
-                        </div>
-                    </div>
-
-                    <div class="bg-indigo-50 rounded-xl p-3 border border-indigo-100 text-xs space-y-1.5">
-                        <div class="flex justify-between">
-                            <span>จำนวนลิตรดิบ:</span>
-                            <span class="font-bold" id="calc-raw-liters">0.00 ลิตร</span>
-                        </div>
-                        <div id="lpg-discount-row" class="hidden flex justify-between text-green-700">
-                            <span>ส่วนลด LPG:</span>
-                            <span class="font-bold" id="calc-lpg-discount">-0 บาท</span>
-                        </div>
-                        <div class="flex justify-between border-t pt-1.5 font-bold text-indigo-900">
-                            <span>ยอดจ่ายจริง:</span>
-                            <span id="calc-actual-pay">0.00 บาท</span>
-                        </div>
-                    </div>
-
-                    <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-3 rounded-xl">บันทึกการเติมเชื้อเพลิง</button>
-                </form>
-            </div>
-
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-                <h3 class="font-bold text-gray-800 text-sm mb-3">ประวัติการเติมเชื้อเพลิงล่าสุด</h3>
-                <div id="fuel-history-list" class="space-y-2 max-h-64 overflow-y-auto"></div>
-            </div>
-        </section>
-
-        <!-- MAINTENANCE -->
-        <section id="tab-maintenance" class="hidden space-y-4">
-            <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-                <h2 class="font-bold text-gray-800 text-base mb-2">บันทึกการซ่อมบำรุง</h2>
-                <form id="maintenance-form" class="space-y-4">
-                    <input type="date" id="maint-date" required class="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2">
-                    <input type="number" id="maint-mileage" required placeholder="เลขกิโลเมตร" class="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2">
-                    <input type="text" id="maint-category" required placeholder="รายการซ่อม" class="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2">
-                    <input type="number" id="maint-cost" required placeholder="ค่าใช้จ่าย" class="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2">
-                    <button type="submit" class="w-full bg-gradient-to-r from-teal-600 to-green-600 text-white font-bold py-3 rounded-xl">บันทึก</button>
-                </form>
-            </div>
-
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-                <h3 class="font-bold text-amber-700 text-sm mb-3">รายการรอยืนยันสถานะ</h3>
-                <div id="pending-maint-list" class="space-y-3"></div>
-            </div>
-
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-                <h3 class="font-bold text-gray-800 text-sm mb-3">ประวัติการซ่อมบำรุง</h3>
-                <div id="maint-history-list" class="space-y-2 max-h-64 overflow-y-auto"></div>
-            </div>
-        </section>
-
-        <!-- CONFIG -->
-        <section id="tab-config" class="hidden space-y-4">
-            <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-                <h2 class="font-bold text-gray-800 mb-3">เชื่อมต่อ Google Sheets</h2>
-                <input type="url" id="config-gsheet-url" class="w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2 text-sm" placeholder="https://script.google.com/...">
-                <button onclick="saveGSheetConfig()" class="mt-4 w-full bg-indigo-600 text-white py-3 rounded-xl">บันทึกการเชื่อมต่อ</button>
-            </div>
-        </section>
-    </main>
-
-    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
-        <div class="max-w-md mx-auto px-2 flex justify-around">
-            <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-btn active flex-1 py-3 flex flex-col items-center text-indigo-600">
-                <i class="fa-solid fa-chart-line"></i><span class="text-[10px]">สรุป</span>
-            </button>
-            <button onclick="switchTab('fuel')" id="nav-fuel" class="nav-btn flex-1 py-3 flex flex-col items-center text-gray-500">
-                <i class="fa-solid fa-gas-pump"></i><span class="text-[10px]">เติมน้ำมัน</span>
-            </button>
-            <button onclick="switchTab('maintenance')" id="nav-maintenance" class="nav-btn flex-1 py-3 flex flex-col items-center text-gray-500">
-                <i class="fa-solid fa-wrench"></i><span class="text-[10px]">ซ่อมบำรุง</span>
-            </button>
-            <button onclick="switchTab('config')" id="nav-config" class="nav-btn flex-1 py-3 flex flex-col items-center text-gray-500">
-                <i class="fa-solid fa-gears"></i><span class="text-[10px]">ตั้งค่า</span>
-            </button>
+        <div class="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-4 text-white shadow-md">
+          <p class="text-xs opacity-80 uppercase tracking-wider">เลขกิโลล่าสุด</p>
+          <p class="text-2xl font-bold mt-1" id="statLatestMileage">0 <span class="text-sm font-normal">กม.</span></p>
         </div>
-    </nav>
+      </div>
 
-    <div id="custom-toast" class="fixed top-4 left-1/2 -translate-x-1/2 hidden bg-gray-900 text-white px-4 py-3 rounded-2xl shadow-xl z-50"></div>
+      <!-- ส่วนควบคุมกราฟ -->
+      <div class="bg-white p-4 rounded-2xl shadow-sm space-y-4">
+        <div class="flex justify-between items-center">
+          <h2 class="font-bold text-gray-800 text-lg">ค่าใช้จ่ายรายเดือน</h2>
+          <select id="chartFilter" onchange="updateChart()" class="bg-gray-100 border-none rounded-lg text-sm p-2 text-gray-700 focus:ring-2 focus:ring-blue-500">
+            <option value="6">ย้อนหลัง 6 เดือน</option>
+            <option value="12">ย้อนหลัง 1 ปี</option>
+            <option value="all" selected>ทั้งหมด</option>
+          </select>
+        </div>
+        <div class="relative w-full h-64">
+          <canvas id="expenseChart"></canvas>
+        </div>
+      </div>
+    </div>
 
-    <script>
-        // ==================== CONFIG ====================
-        let gsheetUrl = "https://script.google.com/macros/s/AKfycby1MevyU-WBDFyiSLDCQj8IF7172rAQKIwEZ85Uhx1T2OKvRoZeD4NO6diWFbjFt544kw/exec";
+    <!-- ================= SECTION 2: FORM & HISTORY ================= -->
+    <div id="sectionForm" class="hidden space-y-6">
+      <!-- ฟอร์มกรอกข้อมูล -->
+      <form id="fuelForm" onsubmit="handleSubmit(event)" class="bg-white p-5 rounded-2xl shadow-sm space-y-4">
+        <h2 id="formTitle" class="font-bold text-gray-800 text-lg border-b pb-2"><i class="fa-solid fa-plus-circle text-blue-500 mr-2"></i>บันทึกการเติมเชื้อเพลิง</h2>
+        <input type="hidden" id="recordId">
 
-        let fuelLogs = [];
-        let maintLogs = [];
-        let activeFuelType = "Gasoline";
-        let expenseChartInstance = null;
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 mb-1">วันที่เติม</label>
+            <input type="date" id="date" required class="w-full border rounded-xl p-2.5 text-sm focus:outline-blue-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 mb-1">เลขกิโลเมตร</label>
+            <input type="number" id="mileage" required placeholder="เช่น 124500" class="w-full border rounded-xl p-2.5 text-sm focus:outline-blue-500">
+          </div>
+        </div>
 
-        // ==================== JSONP ดึงข้อมูล ====================
-        function fetchCloudData() {
-            if (!gsheetUrl) return;
-            document.getElementById('connection-status').innerHTML = '🔄 กำลังซิงค์...';
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 mb-2">ประเภทเชื้อเพลิง</label>
+          <div class="flex gap-4">
+            <label class="flex items-center bg-gray-50 border p-3 rounded-xl flex-1 cursor-pointer hover:bg-gray-100">
+              <input type="radio" name="type" value="Gasoline" checked onchange="triggerCalculation()" class="mr-2 w-4 h-4 text-blue-600">
+              <span class="text-sm font-medium text-gray-700">Gasoline</span>
+            </label>
+            <label class="flex items-center bg-gray-50 border p-3 rounded-xl flex-1 cursor-pointer hover:bg-gray-100">
+              <input type="radio" name="type" value="LPG" onchange="triggerCalculation()" class="mr-2 w-4 h-4 text-blue-600">
+              <span class="text-sm font-medium text-gray-700">LPG</span>
+            </label>
+          </div>
+        </div>
 
-            const callbackName = 'cb_' + Date.now();
-            window[callbackName] = function(data) {
-                if (data && data.fuel) fuelLogs = data.fuel;
-                if (data && data.maintenance) maintLogs = data.maintenance;
-                document.getElementById('connection-status').innerHTML = '✅ เชื่อมต่อแล้ว';
-                showToast("ซิงค์ข้อมูลสำเร็จ", true);
-                updateDashboard();
-                delete window[callbackName];
-            };
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label id="labelTotalPaid" class="block text-xs font-semibold text-gray-500 mb-1">จำนวนเงินที่จ่าย (บาท)</label>
+            <input type="number" id="totalPaid" step="any" required oninput="triggerCalculation()" placeholder="0.00" class="w-full border rounded-xl p-2.5 text-sm focus:outline-blue-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 mb-1">ราคาต่อลิตร (บาท)</label>
+            <input type="number" id="pricePerLiter" step="any" required oninput="triggerCalculation()" placeholder="0.00" class="w-full border rounded-xl p-2.5 text-sm focus:outline-blue-500">
+          </div>
+        </div>
 
-            const script = document.createElement('script');
-            script.src = gsheetUrl + '?callback=' + callbackName;
-            document.head.appendChild(script);
+        <!-- กล่องแสดงผลลัพธ์คำนวณอัตโนมัติ -->
+        <div id="calcPreview" class="bg-blue-50 border border-blue-100 p-3 rounded-xl text-xs space-y-1 text-blue-800">
+          <div class="flex justify-between"><span>จำนวนลิตร (คำนวณ):</span> <span id="viewLiters" class="font-bold">0.00 ลิตร</span></div>
+          <div class="flex justify-between"><span>ส่วนลดที่ได้:</span> <span id="viewDiscount" class="font-bold">0 บาท</span></div>
+          <div class="flex justify-between text-sm pt-1 border-t border-blue-200 mt-1">
+            <span class="font-bold text-blue-900">ยอดสุทธิที่จะบันทึก:</span> <span id="viewNetPaid" class="font-bold text-blue-900">0.00 บาท</span>
+          </div>
+        </div>
 
-            setTimeout(() => {
-                if (window[callbackName]) delete window[callbackName];
-            }, 15000);
+        <div class="flex gap-2 pt-2">
+          <button type="button" id="cancelEditBtn" onclick="resetForm()" class="hidden w-1/3 bg-gray-200 text-gray-700 p-3 rounded-xl font-medium hover:bg-gray-300">ยกเลิก</button>
+          <button type="submit" id="submitBtn" class="w-full bg-blue-600 text-white p-3 rounded-xl font-medium hover:bg-blue-700 shadow-md">บันทึกข้อมูล</button>
+        </div>
+      </form>
+
+      <!-- ส่วนประวัติแยกตามเดือน -->
+      <div class="space-y-3">
+        <h3 class="font-bold text-gray-800 text-md"><i class="fa-solid fa-history text-gray-500 mr-2"></i>ประวัติการเติมเชื้อเพลิง</h3>
+        <div id="historyContainer" class="space-y-4">
+          <!-- ข้อมูลประวัติจะถูกใส่เข้ามาด้วย JavaScript -->
+          <p class="text-center text-sm text-gray-400 py-4">กำลังโหลดประวัติ...</p>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+
+  <!-- JavaScript โลจิกฝั่งหน้าบ้าน -->
+  <script>
+    let globalData = [];
+    let myChart = null;
+
+    // รันอัตโนมัติเมื่อเปิดหน้าเว็บครั้งแรก
+    window.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('date').value = new Date().toISOString().split('T')[0];
+      loadData();
+    });
+
+    function loadData() {
+      google.script.run.withSuccessHandler((data) => {
+        globalData = data;
+        updateDashboard();
+        updateChart();
+        renderHistory();
+      }).getFuelData();
+    }
+
+    // สลับหน้าจอแท็บ
+    function switchTab(tab) {
+      if (tab === 'dashboard') {
+        document.getElementById('sectionDashboard').classList.remove('hidden');
+        document.getElementById('sectionForm').classList.add('hidden');
+        document.getElementById('tabDashboardBtn').classList.add('tab-active');
+        document.getElementById('tabFormBtn').classList.remove('tab-active');
+      } else {
+        document.getElementById('sectionDashboard').classList.add('hidden');
+        document.getElementById('sectionForm').classList.remove('hidden');
+        document.getElementById('tabDashboardBtn').classList.remove('tab-active');
+        document.getElementById('tabFormBtn').classList.add('tab-active');
+      }
+    }
+
+    // โลจิกคำนวณสิทธิพิเศษ LPG ของคุณตามเงื่อนไขเป๊ะๆ
+    function runCalculation() {
+      const type = document.querySelector('style') ? document.querySelector('input[name="type"]:checked').value : 'Gasoline';
+      const inputMoney = parseFloat(document.getElementById('totalPaid').value) || 0;
+      const pricePerLiter = parseFloat(document.getElementById('pricePerLiter').value) || 0;
+
+      let calculatedLiters = 0;
+      let discount = 0;
+      let finalPaid = inputMoney;
+
+      if (inputMoney > 0 && pricePerLiter > 0) {
+        if (type === 'LPG') {
+          // 1. คำนวณจำนวนลิตรดิบ แล้วตัดเศษลิตรทิ้ง (FLOOR)
+          calculatedLiters = Math.floor(inputMoney / pricePerLiter);
+          // 2. คำนวณส่วนลดเบื้องต้นลิตรละ 0.50 บาท
+          let rawDiscount = calculatedLiters * 0.5;
+          // 3. เงื่อนไขใหม่: ถ้าส่วนลดมีเศษสตางค์ ให้ตัดเศษทิ้งให้เหลือเต็มบาท
+          discount = Math.floor(rawDiscount);
+          // 4. หักยอดจ่ายจริงลงตามส่วนลด
+          finalPaid = inputMoney - discount;
+        } else {
+          // กรณี Gasoline คำนวณตรงๆ ไม่หักเศษ
+          calculatedLiters = Number((inputMoney / pricePerLiter).toFixed(2));
+          discount = 0;
+          finalPaid = inputMoney;
         }
+      }
 
-        // ==================== ส่งข้อมูลไป Sheets ====================
-        function syncWithGSheets(sheetType, data) {
-            if (!gsheetUrl) return;
-            const payload = { action: "addData", sheetName: sheetType, ...data };
+      return { calculatedLiters, discount, finalPaid };
+    }
 
-            fetch(gsheetUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
-            })
-            .then(() => {
-                showToast("ส่งข้อมูลไป Google Sheet สำเร็จ", true);
-                setTimeout(fetchCloudData, 1000);
-            })
-            .catch(() => showToast("บันทึก Local สำเร็จ", false));
+    function triggerCalculation() {
+      const res = runCalculation();
+      document.getElementById('viewLiters').innerText = res.calculatedLiters + ' ลิตร';
+      document.getElementById('viewDiscount').innerText = res.discount + ' บาท';
+      document.getElementById('viewNetPaid').innerText = res.finalPaid.toFixed(2) + ' บาท';
+    }
+
+    // สรุปยอดด้านบนสุดของหน้าแรก
+    function updateDashboard() {
+      if (globalData.length === 0) return;
+
+      // หาเลขกิโลสูงสุด
+      const mileages = globalData.map(d => parseInt(d.mileage)).filter(m => !isNaN(m));
+      const latestMileage = mileages.length > 0 ? Math.max(...mileages) : 0;
+      document.getElementById('statLatestMileage').innerText = latestMileage.toLocaleString();
+
+      // หาเงินที่ใช้เฉพาะเดือนนี้
+      const currentMonthStr = new Date().toISOString().substring(0, 7); // "yyyy-MM"
+      const thisMonthTotal = globalData
+        .filter(d => d.date && d.date.substring(0, 7) === currentMonthStr)
+        .reduce((sum, d) => sum + (parseFloat(d.totalPaid) || 0), 0);
+      
+      document.getElementById('statThisMonth').innerText = thisMonthTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    // ฟังก์ชันวาดกราฟแท่งแยกค่าน้ำมันและแก๊สรายเดือน
+    function updateChart() {
+      if (globalData.length === 0) return;
+
+      const filterValue = document.getElementById('chartFilter').value;
+      
+      // จัดกลุ่มข้อมูลแยกตาม เดือน-ปี และประเภทเชื้อเพลิง
+      let monthlyMap = {};
+      globalData.forEach(item => {
+        if (!item.date) return;
+        const monthKey = item.date.substring(0, 7); // ได้ค่าโครงสร้าง "yyyy-MM"
+        if (!monthlyMap[monthKey]) {
+          monthlyMap[monthKey] = { Gasoline: 0, LPG: 0 };
         }
-
-        // ==================== LPG ====================
-        function selectFuelType(type) {
-            activeFuelType = type;
-            const gas = document.getElementById('btn-fuel-gasoline');
-            const lpg = document.getElementById('btn-fuel-lpg');
-            if (type === 'Gasoline') {
-                gas.classList.add('border-indigo-600','bg-indigo-50','text-indigo-900');
-                gas.classList.remove('border-gray-200','bg-white','text-gray-600');
-                lpg.classList.remove('border-indigo-600','bg-indigo-50','text-indigo-900');
-                lpg.classList.add('border-gray-200','bg-white','text-gray-600');
-                document.getElementById('lpg-discount-row').classList.add('hidden');
-            } else {
-                lpg.classList.add('border-indigo-600','bg-indigo-50','text-indigo-900');
-                lpg.classList.remove('border-gray-200','bg-white','text-gray-600');
-                gas.classList.remove('border-indigo-600','bg-indigo-50','text-indigo-900');
-                gas.classList.add('border-gray-200','bg-white','text-gray-600');
-                document.getElementById('lpg-discount-row').classList.remove('hidden');
-            }
-            calculateFuelVolume();
+        if (item.type === 'Gasoline' || item.type === 'LPG') {
+          monthlyMap[monthKey][item.type] += (parseFloat(item.totalPaid) || 0);
         }
+      });
 
-        function calculateFuelVolume() {
-            const amount = parseFloat(document.getElementById('fuel-amount').value) || 0;
-            const price = parseFloat(document.getElementById('fuel-price-per-liter').value) || 0;
-            document.getElementById('calc-raw-liters').innerText = (amount && price ? (amount/price).toFixed(3) : "0.00") + " ลิตร";
+      // เรียงลำดับเดือนจากอดีตมาปัจจุบัน
+      let sortedMonths = Object.keys(monthlyMap).sort();
 
-            let discount = 0, final = amount;
-            if (activeFuelType === 'LPG' && amount && price) {
-                discount = Math.floor(Math.floor(amount / price) * 0.5);
-                final = amount - discount;
-            }
-            document.getElementById('calc-lpg-discount').innerText = `-${discount} บาท`;
-            document.getElementById('calc-actual-pay').innerText = final.toFixed(2) + " บาท";
+      // กรองตามเงื่อนไขตัวเลือก (6 เดือน / 1 ปี / ทั้งหมด)
+      if (filterValue !== 'all') {
+        const limit = parseInt(filterValue);
+        sortedMonths = sortedMonths.slice(-limit);
+      }
+
+      const gasolineData = sortedMonths.map(m => monthlyMap[m].Gasoline);
+      const lpgData = sortedMonths.map(m => monthlyMap[m].LPG);
+
+      // จัดการตัวแปลกราฟเดิมป้องกันกราฟซ้อน
+      if (myChart) myChart.destroy();
+
+      const ctx = document.getElementById('expenseChart').getContext('2d');
+      myChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: sortedMonths,
+          datasets: [
+            { label: 'Gasoline', data: gasolineData, backgroundColor: '#3b82f6', borderRadius: 6 },
+            { label: 'LPG', data: lpgData, backgroundColor: '#f59e0b', borderRadius: 6 }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+          plugins: { legend: { position: 'top' } }
         }
+      });
+    }
 
-        // ==================== Tab & Toast ====================
-        function switchTab(tab) {
-            document.querySelectorAll('section[id^="tab-"]').forEach(s => s.classList.add('hidden'));
-            document.getElementById(`tab-${tab}`).classList.remove('hidden');
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active', 'text-indigo-600'));
-            document.getElementById(`nav-${tab}`).classList.add('active', 'text-indigo-600');
-            if (tab === 'dashboard') updateDashboard();
-        }
+    // เรนเดอร์ส่วนประวัติแยกหมวดหมู่เป็นรายเดือน
+    function renderHistory() {
+      const container = document.getElementById('historyContainer');
+      if (globalData.length === 0) {
+        container.innerHTML = '<p class="text-center text-sm text-gray-400 py-4">ยังไม่มีข้อมูลบันทึก</p>';
+        return;
+      }
 
-        function showToast(message, success = true) {
-            const toast = document.getElementById('custom-toast');
-            toast.textContent = message;
-            toast.classList.toggle('bg-green-600', success);
-            toast.classList.toggle('bg-red-600', !success);
-            toast.classList.remove('hidden');
-            setTimeout(() => toast.classList.add('hidden'), 3000);
-        }
+      // เรียงประวัติจากใหม่ไปเก่า (ล่าสุดอยู่บนสุด)
+      let sortedData = [...globalData].sort((a, b) => b.date.localeCompare(a.date));
 
-        function toggleVisibility(id) {
-            document.getElementById(id).classList.toggle('hidden');
-        }
+      // จัดกลุ่มข้อมูลตามเดือนเพื่อแยกหัวข้อแสดงผล
+      let groups = {};
+      sortedData.forEach(item => {
+        const monthName = new Date(item.date).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
+        if (!groups[monthName]) groups[monthName] = [];
+        groups[monthName].push(item);
+      });
 
-        function updateDashboard() {
-            renderPendingMaintenance();
-        }
-
-        function renderPendingMaintenance() {
-            document.getElementById('pending-maint-list').innerHTML = `<p class="text-center text-gray-400 py-8">ยังไม่มีรายการรอยืนยัน</p>`;
-        }
-
-        // Load
-        window.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('fuel-date').value = new Date().toISOString().split('T')[0];
-            document.getElementById('maint-date').value = new Date().toISOString().split('T')[0];
-            switchTab('dashboard');
-            selectFuelType('Gasoline');
-            fetchCloudData();
+      let html = '';
+      for (let month in groups) {
+        html += `<div class="space-y-2">
+          <div class="text-xs font-bold text-gray-400 uppercase tracking-wider px-1 mt-4">${month}</div>`;
+        
+        groups[month].forEach(item => {
+          const typeColor = item.type === 'Gasoline' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800';
+          const formattedDate = new Date(item.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+          
+          html += `
+            <div class="bg-white p-3 rounded-xl shadow-sm flex justify-between items-center border border-gray-100">
+              <div class="space-y-0.5">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded-full ${typeColor}">${item.type}</span>
+                  <span class="text-sm font-bold text-gray-800">${parseFloat(item.totalPaid).toLocaleString()} บาท</span>
+                </div>
+                <div class="text-xs text-gray-500">
+                  ${formattedDate} • วิ่งไป ${parseInt(item.mileage).toLocaleString()} กม. (${item.calculatedLiters} ลิตร)
+                  ${item.discount > 0 ? `• <span class="text-emerald-600">ลด ${item.discount}บ.</span>` : ''}
+                </div>
+              </div>
+              <div class="flex gap-1">
+                <button onclick="editRecord(${item.id})" class="text-blue-500 hover:bg-blue-50 p-2 rounded-lg text-sm"><i class="fa-solid fa-pen"></i></button>
+                <button onclick="deleteRecord(${item.id})" class="text-red-500 hover:bg-red-50 p-2 rounded-lg text-sm"><i class="fa-solid fa-trash"></i></button>
+              </div>
+            </div>`;
         });
-    </script>
+        html += `</div>`;
+      }
+      container.innerHTML = html;
+    }
+
+    // จัดการบันทึกเมื่อกดปุ่ม Submit ฟอร์ม
+    function handleSubmit(event) {
+      event.preventDefault();
+      const submitBtn = document.getElementById('submitBtn');
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'กำลังบันทึก...';
+
+      const calcs = runCalculation();
+
+      const record = {
+        id: document.getElementById('recordId').value || null,
+        date: document.getElementById('date').value,
+        mileage: document.getElementById('mileage').value,
+        type: document.querySelector('input[name="type"]:checked').value,
+        totalPaid: calcs.finalPaid, // บันทึกเงินยอดสุทธิที่หักส่วนลดแล้วลงไป
+        pricePerLiter: document.getElementById('pricePerLiter').value,
+        calculatedLiters: calcs.calculatedLiters,
+        discount: calcs.discount
+      };
+
+      google.script.run.withSuccessHandler(() => {
+        resetForm();
+        loadData();
+        switchTab('dashboard');
+      }).saveRecord(record);
+    }
+
+    // ฟังก์ชันกดแก้ไขข้อมูล
+    function editRecord(id) {
+      const item = globalData.find(d => d.id == id);
+      if (!item) return;
+
+      document.getElementById('recordId').value = item.id;
+      document.getElementById('date').value = item.date;
+      document.getElementById('mileage').value = item.mileage;
+      
+      // ติ๊กเลือก Radio Type เดิม
+      document.querySelectorAll('input[name="type"]').forEach(radio => {
+        if (radio.value === item.type) radio.checked = true;
+      });
+
+      // เนื่องจากหน้าชีตเก็บค่าที่ 'หักส่วนลดแล้ว' 
+      // แต่หน้ากรอกข้อมูลผู้ใช้ต้องการพิมพ์ยอดเงินเต็มก่อนหัก เราจึงต้องบวกส่วนลดกลับคืนไปแสดงผล
+      const originalPaid = parseFloat(item.totalPaid) + (parseFloat(item.discount) || 0);
+      document.getElementById('totalPaid').value = originalPaid;
+      document.getElementById('pricePerLiter').value = item.pricePerLiter;
+
+      triggerCalculation();
+
+      // เปลี่ยน UI ฟอร์มให้เป็นโหมดแก้ไข
+      document.getElementById('formTitle').innerHTML = '<i class="fa-solid fa-pen-to-square text-amber-500 mr-2"></i>แก้ไขข้อมูล';
+      document.getElementById('submitBtn').innerText = 'บันทึกการแก้ไข';
+      document.getElementById('submitBtn').classList.replace('bg-blue-600', 'bg-amber-500');
+      document.getElementById('submitBtn').classList.replace('hover:bg-blue-700', 'hover:bg-amber-600');
+      document.getElementById('cancelEditBtn').classList.remove('hidden');
+
+      // เลื่อนแท็บมาที่หน้าฟอร์ม
+      switchTab('form');
+    }
+
+    // ฟังก์ชันกดลบข้อมูล
+    function deleteRecord(id) {
+      if (confirm('คุณแน่ใจใช่ไหมว่าต้องการลบรายการนี้? เมื่อลบแล้วข้อมูลใน Google Sheet จะหายไปด้วย')) {
+        google.script.run.withSuccessHandler((res) => {
+          if (res.success) loadData();
+          else alert(res.message);
+        }).deleteRecord(id);
+      }
+    }
+
+    // รีเซ็ตค่าในฟอร์มกลับเป็นเริ่มต้น
+    function resetForm() {
+      document.getElementById('recordId').value = '';
+      document.getElementById('date').value = new Date().toISOString().split('T')[0];
+      document.getElementById('mileage').value = '';
+      document.getElementById('totalPaid').value = '';
+      document.getElementById('pricePerLiter').value = '';
+      document.querySelector('input[name="type"][value="Gasoline"]').checked = true;
+      
+      triggerCalculation();
+
+      document.getElementById('formTitle').innerHTML = '<i class="fa-solid fa-plus-circle text-blue-500 mr-2"></i>บันทึกการเติมเชื้อเพลิง';
+      document.getElementById('submitBtn').disabled = false;
+      document.getElementById('submitBtn').innerText = 'บันทึกข้อมูล';
+      document.getElementById('submitBtn').classList.replace('bg-amber-500', 'bg-blue-600');
+      document.getElementById('submitBtn').classList.replace('hover:bg-amber-600', 'hover:bg-blue-700');
+      document.getElementById('cancelEditBtn').classList.add('hidden');
+    }
+  </script>
 </body>
 </html>
